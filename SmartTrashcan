@@ -1,23 +1,85 @@
 #include <Servo.h>
-
-#define trigPin 9
-#define echoPin 10
-
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(12, 11, 5, 4, 3, 2);
+#define trigPin1 9
+#define echoPin1 10
+#define trigPin2 7
+#define echoPin2 8
+#define redPin A0
+#define greenPin A1
+#define bluePin A2
+#define buzzerPin 13
 Servo myServo;
+
+
+int distance1;
+int distance2;
+int fillPercent;
 
 void setup() {
 
   Serial.begin(9600);
 
-  pinMode(trigPin, OUTPUT);
-  pinMode(echoPin, INPUT);
+  setupPins();
+
+  setupLCD();
 
   myServo.attach(6);
-
   myServo.write(0);
 }
 
+
 void loop() {
+
+  distance1 = readDistance(trigPin1, echoPin1);
+
+  distance2 = readDistance(trigPin2, echoPin2);
+
+  calculateFillPercentage();
+
+  printSerialData();
+
+  controlServo();
+
+  updateBinStatus();
+
+  delay(500);
+}
+
+
+void setupPins() {
+
+  pinMode(trigPin1, OUTPUT);
+  pinMode(echoPin1, INPUT);
+
+  pinMode(trigPin2, OUTPUT);
+  pinMode(echoPin2, INPUT);
+
+  pinMode(redPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+  pinMode(bluePin, OUTPUT);
+
+  pinMode(buzzerPin, OUTPUT);
+}
+
+
+void setupLCD() {
+
+  lcd.begin(16, 2);
+
+  lcd.setCursor(0, 0);
+  lcd.print("SMART BIN");
+
+  lcd.setCursor(0, 1);
+  lcd.print("SYSTEM READY");
+
+  delay(2000);
+
+  lcd.clear();
+}
+
+
+int readDistance(int trigPin, int echoPin) {
 
   long duration;
   int distance;
@@ -34,10 +96,45 @@ void loop() {
 
   distance = duration * 0.034 / 2;
 
-  Serial.print("Distance: ");
-  Serial.println(distance);
+  return distance;
+}
 
-  if(distance < 20) {
+
+void calculateFillPercentage() {
+
+  int binHeight = 30;
+
+  int filledHeight = binHeight - distance2;
+
+  fillPercent = (filledHeight * 100) / binHeight;
+
+  if(fillPercent < 0) {
+    fillPercent = 0;
+  }
+
+  if(fillPercent > 100) {
+    fillPercent = 100;
+  }
+}
+
+
+void printSerialData() {
+
+  Serial.print("Hand Distance: ");
+  Serial.print(distance1);
+
+  Serial.print(" cm | Fill Distance: ");
+  Serial.print(distance2);
+
+  Serial.print(" cm | Fill: ");
+  Serial.print(fillPercent);
+
+  Serial.println("%");
+}
+
+void controlServo() {
+
+  if(distance1 < 20) {
 
     myServo.write(90);
 
@@ -47,6 +144,70 @@ void loop() {
 
     myServo.write(0);
   }
+}
 
-  delay(500);
+
+void setRGB(bool red, bool green, bool blue) {
+
+  digitalWrite(redPin, red);
+  digitalWrite(greenPin, green);
+  digitalWrite(bluePin, blue);
+}
+
+void showLCD(String status) {
+
+  lcd.clear();
+
+  lcd.setCursor(0, 0);
+  lcd.print("BIN STATUS:");
+
+  lcd.setCursor(0, 1);
+
+  lcd.print(status);
+
+  lcd.print(" ");
+
+  lcd.print(fillPercent);
+
+  lcd.print("%");
+}
+
+
+void updateBinStatus() {
+
+
+  if(distance2 <= 10) {
+
+    setRGB(HIGH, LOW, LOW);
+
+    tone(buzzerPin, 1000);
+
+    showLCD("FULL");
+
+    Serial.println("BIN FULL");
+  }
+
+
+  else if(distance2 <= 20) {
+
+    setRGB(HIGH, HIGH, LOW);
+
+    noTone(buzzerPin);
+
+    showLCD("MEDIUM");
+
+    Serial.println("BIN MEDIUM");
+  }
+
+
+  else {
+
+    setRGB(LOW, HIGH, LOW);
+
+    noTone(buzzerPin);
+
+    showLCD("EMPTY");
+
+    Serial.println("BIN EMPTY");
+  }
 }
